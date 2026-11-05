@@ -20,7 +20,7 @@ O tutorial nasceu de um caso real. A primeira suspeita era a letra da unidade, m
 - Acesso de administrador para instalar o Node.js.
 - Internet no primeiro uso, porque o `npx` baixa o pacote do servidor.
 
-Nos exemplos, `\\192.168.x.x\Obsidian` é só um modelo. Troque `192.168.x.x` pelo IP real do servidor (ou pelo nome dele), `Obsidian` pelo nome do compartilhamento e `O:` pela letra da sua unidade. O comando `net use`, do passo 3, mostra esses valores.
+Nos exemplos, `\\SERVIDOR\Obsidian` é só um modelo. Troque `SERVIDOR` pelo nome ou IP do servidor, `Obsidian` pelo nome do compartilhamento e `O:` pela letra da sua unidade. O comando `net use`, do passo 3, mostra esses valores.
 
 ## Passo a passo
 
@@ -63,7 +63,7 @@ A mensagem do Windows pode aparecer com acentos quebrados, por exemplo `'npx' n�
 
 ```powershell
 net use
-Test-Path "\\192.168.x.x\Obsidian"
+Test-Path "\\SERVIDOR\Obsidian"
 ```
 
 O `net use` mostra a letra e o caminho remoto. O `Test-Path` precisa responder `True`.
@@ -89,7 +89,7 @@ Abra um **novo** PowerShell, para carregar o PATH atualizado, e repita a verific
 ### 5. Teste o servidor fora do Claude
 
 ```powershell
-npx -y @modelcontextprotocol/server-filesystem "\\192.168.x.x\Obsidian"
+npx -y @modelcontextprotocol/server-filesystem "\\SERVIDOR\Obsidian"
 ```
 
 O resultado esperado é este, e o comando fica aguardando (encerre com `Ctrl+C`):
@@ -97,13 +97,13 @@ O resultado esperado é este, e o comando fica aguardando (encerre com `Ctrl+C`)
 ```text
 Secure MCP Filesystem Server running on stdio
 Effective allowed directories (from the command line):
-  \\192.168.x.x\Obsidian\
+  \\SERVIDOR\Obsidian\
 ```
 
 Para um teste completo, o script [`scripts/testar-mcp.js`](scripts/testar-mcp.js) conversa com o servidor pelo protocolo MCP e lista a pasta:
 
 ```powershell
-node scripts\testar-mcp.js "\\192.168.x.x\Obsidian"
+node scripts\testar-mcp.js "\\SERVIDOR\Obsidian"
 ```
 
 Se funcionar, ele mostra `initialize OK` e o conteúdo do vault na linha `list_directory`.
@@ -125,7 +125,7 @@ Dentro de `mcpServers`, adicione o bloco `obsidian` e não mexa no resto do arqu
         "-y",
         "@modelcontextprotocol/server-filesystem",
         "--confine-roots",
-        "\\\\192.168.x.x\\Obsidian"
+        "\\\\SERVIDOR\\Obsidian"
       ]
     }
   }
@@ -134,7 +134,7 @@ Dentro de `mcpServers`, adicione o bloco `obsidian` e não mexa no resto do arqu
 
 Três detalhes importam:
 
-- **Barras no JSON:** cada `\` vira `\\`, então `\\192.168.x.x\Obsidian` fica `"\\\\192.168.x.x\\Obsidian"`.
+- **Barras no JSON:** cada `\` vira `\\`, então `\\SERVIDOR\Obsidian` fica `"\\\\SERVIDOR\\Obsidian"`.
 - **`cmd /c`:** no Windows o `npx` é um arquivo `npx.cmd`, que normalmente não pode ser iniciado diretamente sem passar pelo `cmd`.
 - **`--confine-roots`:** mantém o vault acessível nas sessões do Code e do Cowork, mas amplia o alcance delas. Leia [a seção sobre isso](#sessões-do-code-e-do-cowork) antes de usar, principalmente se o vault for compartilhado.
 

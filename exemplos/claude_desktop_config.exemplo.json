@@ -8,7 +8,7 @@
         "-y",
         "@modelcontextprotocol/server-filesystem",
         "--confine-roots",
-        "\\\\192.168.x.x\\Obsidian"
+        "\\\\SERVIDOR\\Obsidian"
       ]
     }
   }
