@@ -10,7 +10,7 @@ O tutorial nasceu de um caso real. A primeira suspeita era a letra da unidade, m
 |---|---|---|
 | Status `failed`, erro `Connection closed`, log com `'npx' não é reconhecido` | Node.js não instalado | [Instale o Node.js](#4-instale-o-nodejs) |
 | Log com `spawn npx ENOENT` | Falta do Node.js, ou `npx` chamado direto no config | Instale o Node.js e use [`cmd /c npx`](#6-configure-o-servidor) |
-| Servidor conecta, mas responde `Access denied - path outside allowed directories` | Sessão do Code/Cowork substituiu as pastas permitidas | [Veja a limitação](#limitação-sessões-do-code-e-do-cowork) |
+| Servidor conecta, mas responde `Access denied - path outside allowed directories` | Sessão do Code/Cowork substituiu as pastas permitidas | [Use `--confine-roots`](#sessões-do-code-e-do-cowork) |
 | `Cannot access directory O:\", skipping` | Aspas depois da barra no teste manual | [Veja as armadilhas](#armadilhas) |
 
 ## Requisitos
@@ -20,7 +20,7 @@ O tutorial nasceu de um caso real. A primeira suspeita era a letra da unidade, m
 - Acesso de administrador para instalar o Node.js.
 - Internet no primeiro uso, porque o `npx` baixa o pacote do servidor.
 
-Nos exemplos, troque `\\SERVIDOR\Obsidian` pelo caminho da sua rede e `O:` pela sua letra.
+Nos exemplos, `\\192.168.x.x\Obsidian` é só um modelo. Troque `192.168.x.x` pelo IP real do servidor (ou pelo nome dele), `Obsidian` pelo nome do compartilhamento e `O:` pela letra da sua unidade. O comando `net use`, do passo 3, mostra esses valores.
 
 ## Passo a passo
 
@@ -63,7 +63,7 @@ A mensagem do Windows pode aparecer com acentos quebrados, por exemplo `'npx' n�
 
 ```powershell
 net use
-Test-Path "\\SERVIDOR\Obsidian"
+Test-Path "\\192.168.x.x\Obsidian"
 ```
 
 O `net use` mostra a letra e o caminho remoto. O `Test-Path` precisa responder `True`.
@@ -89,7 +89,7 @@ Abra um **novo** PowerShell, para carregar o PATH atualizado, e repita a verific
 ### 5. Teste o servidor fora do Claude
 
 ```powershell
-npx -y @modelcontextprotocol/server-filesystem "\\SERVIDOR\Obsidian"
+npx -y @modelcontextprotocol/server-filesystem "\\192.168.x.x\Obsidian"
 ```
 
 O resultado esperado é este, e o comando fica aguardando (encerre com `Ctrl+C`):
@@ -97,13 +97,13 @@ O resultado esperado é este, e o comando fica aguardando (encerre com `Ctrl+C`)
 ```text
 Secure MCP Filesystem Server running on stdio
 Effective allowed directories (from the command line):
-  \\SERVIDOR\Obsidian\
+  \\192.168.x.x\Obsidian\
 ```
 
 Para um teste completo, o script [`scripts/testar-mcp.js`](scripts/testar-mcp.js) conversa com o servidor pelo protocolo MCP e lista a pasta:
 
 ```powershell
-node scripts\testar-mcp.js "\\SERVIDOR\Obsidian"
+node scripts\testar-mcp.js "\\192.168.x.x\Obsidian"
 ```
 
 Se funcionar, ele mostra `initialize OK` e o conteúdo do vault na linha `list_directory`.
@@ -124,17 +124,19 @@ Dentro de `mcpServers`, adicione o bloco `obsidian` e não mexa no resto do arqu
         "npx",
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "\\\\SERVIDOR\\Obsidian"
+        "--confine-roots",
+        "\\\\192.168.x.x\\Obsidian"
       ]
     }
   }
 }
 ```
 
-Dois detalhes importam:
+Três detalhes importam:
 
-- **Barras no JSON:** cada `\` vira `\\`, então `\\SERVIDOR\Obsidian` fica `"\\\\SERVIDOR\\Obsidian"`.
+- **Barras no JSON:** cada `\` vira `\\`, então `\\192.168.x.x\Obsidian` fica `"\\\\192.168.x.x\\Obsidian"`.
 - **`cmd /c`:** no Windows o `npx` é um arquivo `npx.cmd`, que normalmente não pode ser iniciado diretamente sem passar pelo `cmd`.
+- **`--confine-roots`:** mantém o vault acessível nas sessões do Code e do Cowork, mas amplia o alcance delas. Leia [a seção sobre isso](#sessões-do-code-e-do-cowork) antes de usar, principalmente se o vault for compartilhado.
 
 Valide o JSON:
 
@@ -148,26 +150,30 @@ Get-Content $cfg -Raw -Encoding UTF8 | ConvertFrom-Json | Select-Object -ExpandP
 2. Veja se o servidor `obsidian` deixou de aparecer como `failed`.
 3. Em uma conversa nova, peça para listar o conteúdo do vault.
 
-## Limitação: sessões do Code e do Cowork
+## Sessões do Code e do Cowork
 
-**Conectar não garante acesso ao vault.** O servidor tem duas fontes de pastas permitidas, os argumentos do config e as *Roots* informadas pelo cliente MCP. Quando o cliente informa Roots válidas, elas **substituem** os argumentos.
-
-| Onde o servidor é usado | O que acontece | Como foi verificado |
-|---|---|---|
-| Sessão do Code com uma pasta aberta | Só a pasta da sessão fica permitida; o vault dá `Access denied` | Testado com chamadas reais, por UNC e por letra |
-| Conexão principal do app | O vault continua permitido | Só pelo log (`Client does not support MCP Roots, using allowed directories set from server args`) |
-| Sessão que não informa Roots válidas | O vault continua permitido | Só pelo log (`No valid root directories provided by client`) |
-
-No log, a substituição aparece assim:
+**Sem `--confine-roots`, conectar não garante acesso ao vault.** O servidor tem duas fontes de pastas permitidas, os argumentos do config e as *Roots* informadas pelo cliente MCP. O app informa a pasta da sessão como Root, e por padrão as Roots válidas **substituem** os argumentos:
 
 ```text
 Effective allowed directories (from the client's Roots, which replaced the command-line directories):
   C:\caminho\da\pasta-da-sessao
 ```
 
-Para conferir numa sessão, chame a ferramenta `list_allowed_directories` do próprio servidor.
+Com `--confine-roots`, o servidor usa só a interseção entre as Roots e as pastas do config. Uma pasta de sessão fora do vault é ignorada:
 
-**Possível contorno, não testado:** abrir a sessão na própria pasta do vault, para que ela seja a Root informada.
+```text
+Ignored client roots outside the command-line directories (--confine-roots): C:\caminho\da\pasta-da-sessao
+```
+
+| Onde o servidor é usado | Sem a opção | Com `--confine-roots` |
+|---|---|---|
+| Sessão do Code com pasta fora do vault | Só a pasta da sessão; o vault dá `Access denied` (testado) | O vault inteiro (testado) |
+| Sessão aberta dentro do vault | Só a pasta da sessão (pelo código) | Só a pasta da sessão (pelo código) |
+| Conexão principal do app | O vault inteiro (pelo log) | Não testado |
+
+O `--confine-roots` foi testado no `server-filesystem` 2.2.0. Depois de adicioná-lo, reinicie o app. Para conferir, chame `list_allowed_directories` numa sessão: a resposta deve ser o caminho do vault.
+
+**Efeito colateral:** toda sessão do Code ou do Cowork neste computador passa a poder ler e gravar no vault inteiro, seja qual for a pasta aberta. Se o vault for compartilhado, isso alcança as notas de outras pessoas. Sem a opção, o vault fica fora do alcance dessas sessões, e pode ser a escolha certa se você não precisa dele nelas.
 
 ## Armadilhas
 
@@ -178,7 +184,9 @@ Para conferir numa sessão, chame a ferramenta `list_allowed_directories` do pr�
 
 ## Segurança
 
-O `server-filesystem` não é somente leitura. Ele oferece ferramentas como `write_file`, `edit_file` e `move_file`, então o Claude pode alterar as notas dentro das pastas permitidas. Mantenha um backup ou histórico de versões do vault.
+Por padrão, o `server-filesystem` não é somente leitura. Ele oferece ferramentas como `write_file`, `edit_file` e `move_file`, então o Claude pode alterar as notas dentro das pastas permitidas. Mantenha um backup ou histórico de versões do vault.
+
+Se o Claude só precisa consultar as notas, o pacote documenta a opção `--read-only`, que entra nos `args` antes do caminho. Ela não foi testada neste tutorial.
 
 Se a sua cópia deste tutorial for pública, tire do config e dos logs o que for interno antes de colar: IPs, nomes de usuário e os blocos de preferências e identificadores de conta do `claude_desktop_config.json`.
 
@@ -203,3 +211,7 @@ Em 5 de novembro de 2026:
 | `secure-filesystem-server` | 2.2.0 |
 
 Os caminhos e o comportamento do app podem mudar em outras versões.
+
+## Licença
+
+Distribuído sob a [licença MIT](LICENSE).

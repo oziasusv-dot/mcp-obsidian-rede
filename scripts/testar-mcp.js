@@ -1,7 +1,8 @@
 // Testa o server-filesystem pelo protocolo MCP, iniciando-o como o config faz (cmd /c npx ...).
 // O npx baixa o pacote @modelcontextprotocol/server-filesystem se ele nao estiver em cache.
 //
-// Uso (Windows): node testar-mcp.js "\\SERVIDOR\Obsidian" [outro caminho ...]
+// Uso (Windows): node testar-mcp.js "\\192.168.x.x\Obsidian" [outro caminho ...]
+// Troque 192.168.x.x pelo IP real do servidor (ou pelo nome dele).
 const { spawn, execSync } = require('child_process');
 
 const TIMEOUT_MS = 60000;
@@ -90,7 +91,7 @@ function run(root) {
 (async () => {
   const roots = process.argv.slice(2);
   if (roots.length === 0) {
-    console.error('Uso: node testar-mcp.js "\\\\SERVIDOR\\Obsidian" [outro caminho ...]');
+    console.error('Uso: node testar-mcp.js "\\\\192.168.x.x\\Obsidian" [outro caminho ...]');
     process.exit(2);
   }
   for (const r of roots) await run(r);
